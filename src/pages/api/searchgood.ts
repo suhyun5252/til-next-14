@@ -6,5 +6,10 @@ export default function handler(
   req: NextApiRequest,
   res: NextApiResponse<GoodDataType[]>
 ) {
-  res.status(200).json(seedData);
+  // 요청(req)에 의한 쿼리(query) 처리하기
+  const { keyword } = req.query;
+  const filterGoods = seedData.filter((good) =>
+    good.title.includes(keyword as string)
+  );
+  res.status(200).json(filterGoods);
 }
