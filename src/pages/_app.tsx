@@ -1,28 +1,20 @@
+import GlobalLayout from "@/components/global-layout";
 import "@/styles/globals.css";
+import { NextPage } from "next";
 import type { AppProps } from "next/app";
-import Link from "next/link";
-import { useRouter } from "next/router";
+import { ReactNode } from "react";
 
-export default function App({ Component, pageProps }: AppProps) {
-  const router = useRouter();
-  const handleClick = () => {
-    router.push("/");
-  };
-  return (
-    <>
-      <header>
-        <Link href={"/"}>홈</Link>
-        &nbsp;
-        <Link href={"/search?keword=김밥"}>검색 /search?keword=김밥</Link>
-        &nbsp;
-        <Link href={"/good/1"}>제품상세 /good/1</Link>
-        &nbsp;
-        <button onClick={() => handleClick()}>홈으로 이동하기</button>
-      </header>
-      <main>
-        <Component {...pageProps} />
-      </main>
-      <footer></footer>
-    </>
-  );
+// 속성을 추가해준다. 확장도 한다.
+type NextPageWithLayout = NextPage & {
+  getLayout?: (page: ReactNode) => ReactNode;
+};
+
+export default function App({
+  Component,
+  pageProps,
+}: AppProps & {
+  Component: NextPageWithLayout;
+}) {
+  const getLayout = Component.getLayout ?? ((page: ReactNode) => page);
+  return <GlobalLayout>{getLayout(<Component {...pageProps} />)}</GlobalLayout>;
 }
