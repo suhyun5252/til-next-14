@@ -1,32 +1,27 @@
 import styles from "@/pages/search.module.css";
 // 앱 라우터버전 import { useRouter } from "next/navigation";
-import { useRouter } from "next/router";
-// import goods from "@/mock/goods.json";
 import GoodItem from "@/components/good-item";
 import SearchLayout from "@/components/search-layout";
-import { ReactNode } from "react";
-import { GetServerSidePropsContext, InferGetServerSidePropsType } from "next";
+import goods from "@/mock/goods.json";
+import { useRouter } from "next/router";
+import { ReactNode, useEffect, useState } from "react";
+import { GoodDataType } from "@/types";
 import { fetchSearchGood } from "@/lib/fetch-search-good";
 
-// SSR 과 데이터 패치 적용
-// 약속된 함수를 사용한다.
-// 쿼리 스트링을 읽어서 데이터 패치를 하여야 한다.
-export async function getServerSideProps(context: GetServerSidePropsContext) {
-  // 쿼리 스트링이 context 에 담겨있음.
-  const { keyword } = context.query;
-  const goods = (await fetchSearchGood(keyword as string)) || [];
-  return {
-    props: {
-      goods,
-    },
-  };
-}
+export default function Page() {
+  const [goods, setGoods] = useState<GoodDataType[]>([]);
 
-export default function Page({
-  goods,
-}: InferGetServerSidePropsType<typeof getServerSideProps>) {
   const router = useRouter();
   const { keyword } = router.query;
+
+  const fetchSearchResult = async () => {
+    const data = await fetchSearchGood(keyword as string);
+    setGoods(data);
+  };
+  useEffect(() => {
+    // 키워드가 바뀌면 실행한다.
+    fetchSearchResult();
+  }, [keyword]);
   return (
     <div className={styles.container}>
       <h4>
