@@ -1,160 +1,256 @@
-# ISR
+# SEO
 
-- Incremental Static Regeneration
-- 정적 페이지 즉 SSG 로 생성된 페이지를 다시 생성하는 법
+## http://localhost:3000 SEO
 
-## /src/pages/index.tsx
+- /src/page/index.tsx
+- 주의사항 : `import Head from "next/head"`
+- meta 태그이 속성은 ChatGPT을 이용해서 작성해 보자.
 
 ```tsx
+import styles from "@/pages/index.module.css";
+import GoodItem from "@/components/good-item";
+import SearchLayout from "@/components/search-layout";
+import { fetchGoods } from "@/lib/fetch";
+import { InferGetStaticPropsType } from "next";
+import { ReactNode } from "react";
+import { fetchRandomGood } from "../lib/fetch-random-good";
+import Head from "next/head";
+
+// Next 에는 약속이 된 함수가 있다.
+
 export const getStaticProps = async () => {
   // 병렬로 실행하기
   const [allGoods, randomGoods] = await Promise.all([
     fetchGoods(),
     fetchRandomGood(),
   ]);
-
   return {
     props: {
       allGoods: allGoods,
       randomGoods: randomGoods,
     },
-    revalidate: 60, // 60 초후 다시 생성
+    revalidate: 60, // 60초마다 다시 생성
   };
 };
-```
 
-## API 호출로 재생성하기
-
-### API 생성
-
--/src/pages/api/revalidate.ts
-
-- http://localhost:3000/api/revalidate 로 호출
-
-```ts
-import type { NextApiRequest, NextApiResponse } from "next";
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  try {
-    // /src/pages/index.tsx 페이지를 다시 생성
-    await res.revalidate("/");
-    return res.json({ revalidated: true });
-  } catch (error) {
-    console.log(error);
-    return res.status(500).send("Error revalidating");
-  }
+export default function Home({
+  allGoods,
+  randomGoods,
+}: InferGetStaticPropsType<typeof getStaticProps>) {
+  return (
+    <>
+      <Head>
+        <title>해외 쇼핑몰 추천 서비스</title>
+        <meta name="description" content="해외 쇼핑몰 추천 서비스입니다." />
+        {/* sns 공유 타이틀 */}
+        <meta property="og:title" content="해외 쇼핑몰 추천 서비스" />
+        <meta
+          property="og:description"
+          content="해외 쇼핑몰 추천 서비스입니다."
+        />
+        <meta property="og:image" content="/thumbnail.png" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="icon" href="/favicon.ico" />
+      </Head>
+      <div className={styles.container}>
+        <section>
+          <h3>지금 추천하는 상품</h3>
+          {/* 3개만 랜덤하게 출력 */}
+          {randomGoods.map((item) => (
+            <GoodItem key={item.id} {...item} />
+          ))}
+        </section>
+        <section>
+          <h3>등록된 모든 상품</h3>
+          {/* 전체 상품 출력 */}
+          {allGoods.map((item) => (
+            <GoodItem key={item.id} {...item} />
+          ))}
+        </section>
+      </div>
+    </>
+  );
 }
-```
 
-### fetch 생성
-
-- /src/lib/fetch-revalidate.ts
-
-```ts
-export const fetchRevalidate = async () => {
-  const url = "http://localhost:3000/api/revalidate";
-
-  try {
-    const res = await fetch(url);
-    return res.json();
-  } catch (error) {
-    console.log(error);
-  }
+// JS 에서는 함수도 객체다.
+// 객체는 속성을 추가할 수 있다.
+Home.getLayout = (page: ReactNode) => {
+  return <SearchLayout>{page}</SearchLayout>;
 };
 ```
 
-## 실행시
+## http://localhost:3000/search?keyword=Jhon : SEO 설정
+
+- /src/pages/search.tsx
 
 ```tsx
-onClick = { fetchRevalidate };
-```
-
-# 실제 API 서버 연동 처리
-
-- 왜 api 폴더를 사용했지? 그냥 lib 폴더에 fetch 써도 되지 않나?
-- /src/pages/api/getallgood.ts
-
-```ts
-// Next.js API route support: https://nextjs.org/docs/api-routes/introduction
-import type { NextApiRequest, NextApiResponse } from "next";
-// import { seedData } from "./alldata";
+import styles from "@/pages/search.module.css";
+// 앱 라우터버전 import { useRouter } from "next/navigation";
+import GoodItem from "@/components/good-item";
+import SearchLayout from "@/components/search-layout";
+import goods from "@/mock/goods.json";
+import { useRouter } from "next/router";
+import { ReactNode, useEffect, useState } from "react";
 import { GoodDataType } from "@/types";
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse<GoodDataType[]>
-) {
-  const data = await fetch("https://fakestoreapi.com/products");
-  const json = await data.json();
-  res.status(200).json(json);
-}
-```
+import { fetchSearchGood } from "@/lib/fetch-search-good";
+import Head from "next/head";
 
-- /src/pages/api/onegood.ts
+export default function Page() {
+  const [goods, setGoods] = useState<GoodDataType[]>([]);
 
-```ts
-\// Next.js API route support: https://nextjs.org/docs/api-routes/introduction
-import type { NextApiRequest, NextApiResponse } from "next";
-// import { seedData } from "./alldata";
-import { GoodDataType } from "@/types";
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse<GoodDataType | null>
-) {
-  // 요청(req)에 의한 Params 처리하기
-  // URI 는 무조건 문자열로 처리됩니다.
-  const { id } = req.query;
-  const data = await fetch(`https://fakestoreapi.com/products/${id}`);
-  const json = await data.json();
+  const router = useRouter();
+  const { keyword } = router.query;
 
-  res.status(200).json(json || null);
-}
-
-
-```
-
-- /src/pages/api/randomgood.ts
-
-```ts
-// Next.js API route support: https://nextjs.org/docs/api-routes/introduction
-import type { NextApiRequest, NextApiResponse } from "next";
-// import { seedData } from "./alldata";
-import { GoodDataType } from "@/types";
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse<GoodDataType[]>
-) {
-  // 전체 데이터에서 랜덤하게 3개만 추출하기
-  const data = await fetch("https://fakestoreapi.com/products");
-  const json = await data.json();
-  const randomGoods = json.sort(() => Math.random() - 0.5).slice(0, 3);
-  res.status(200).json(randomGoods);
-}
-```
-
-- /src/pages/api/searchgood.ts
-
-```ts
-// Next.js API route support: https://nextjs.org/docs/api-routes/introduction
-import type { NextApiRequest, NextApiResponse } from "next";
-// import { seedData } from "./alldata";
-import { GoodDataType } from "@/types";
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse<GoodDataType[]>
-) {
-  // 요청(req)에 의한 쿼리(query) 처리하기
-  const { keyword } = req.query;
-  const data = await fetch("https://fakestoreapi.com/products");
-  const json = await data.json();
-  const filterGoods = json.filter((good: GoodDataType) =>
-    good.title.includes(keyword as string)
+  const fetchSearchResult = async () => {
+    const data = await fetchSearchGood(keyword as string);
+    setGoods(data);
+  };
+  useEffect(() => {
+    // 키워드가 바뀌면 실행한다.
+    fetchSearchResult();
+  }, [keyword]);
+  return (
+    <>
+      <Head>
+        <title>해외 쇼핑몰 {keyword} 검색 서비스</title>
+        <meta
+          name="description"
+          content={`해외 상품  ${keyword} 검색 서비스입니다.`}
+        />
+        {/* sns 공유 타이틀 */}
+        <meta
+          property="og:title"
+          content={`해외 상품  ${keyword} 검색 서비스`}
+        />
+        <meta
+          property="og:description"
+          content={`해외 상품  ${keyword} 검색 서비스입니다.`}
+        />
+        <meta property="og:image" content="/thumbnail.png" />
+      </Head>
+      <div className={styles.container}>
+        <h4>
+          <strong>{keyword}</strong> : 검색 결과
+        </h4>
+        <div>
+          {goods.map((item) => (
+            <GoodItem key={item.id} {...item} />
+          ))}
+        </div>
+      </div>
+    </>
   );
-  res.status(200).json(filterGoods);
 }
+
+Page.getLayout = (page: ReactNode) => {
+  return <SearchLayout>{page}</SearchLayout>;
+};
 ```
 
-- 실제 서버가 있다면 API 가 정상적으로 실행이 됨. 지금만 build 시 생성 안됨
+## http://localhost:3000/good/1 : SEO 설정
 
-# 살아있는 서버로 연결하기 위해 fetch를 직접 처리
+```tsx
+import { fetchOneGood } from "@/lib/fetch-one-good";
+import styles from "@/pages/good/[id].module.css";
+import {
+  GetServerSidePropsContext,
+  InferGetServerSidePropsType,
+  InferGetStaticPropsType,
+} from "next";
+import Head from "next/head";
+import Image from "next/image";
+import { useRouter } from "next/router";
+// // 라우터가 동적인 경로가 필요로 한 상황이다.
+// http://localhost:3000/good/1 ===> 파라메터
+export function getStaticPaths() {
+  return {
+    // paths 에는 기본적으로 SSG를 적용해서 데이터를 미리 생성후 반영할 경로
+    paths: [{ params: { id: "1" } }, { params: { id: "2" } }],
+    // fallback: false, // 위의 paths 에 없는 경로는 404 로 출력
+    // fallback: true, // 위의 paths 에 없는 경로는 레이아웃 렌더링 후 데이터 로드
+    fallback: "blocking", // 위의 paths 에 없는 경로는 즉시 SSG 로 생성
+  };
+}
+
+export async function getStaticProps(context: GetServerSidePropsContext) {
+  // 쿼리 스티링이 context 에 담겨있음
+  // const {keyword} = context.query;
+
+  // 파라미터는 context 에 담겨있음
+  // 파라미터도 서버에서 문자열로만 온다
+  const id = context.params!.id;
+  const data = await fetchOneGood(parseInt(id as string));
+  return {
+    props: {
+      data: data,
+    },
+  };
+}
+
+export default function Page({
+  data,
+}: InferGetStaticPropsType<typeof getStaticProps>) {
+  const router = useRouter();
+  if (router.isFallback) {
+    return (
+      <>
+        <Head>
+          <title>해외 쇼핑몰 추천 서비스</title>
+          <meta name="description" content="제품 정보가 없습니다." />
+          {/* sns 공유 타이틀 */}
+          <meta property="og:title" content="제품 정보가 없습니다." />
+          <meta property="og:description" content="제품 정보가 없습니다." />
+          <meta property="og:image" content="/thumbnail.png" />
+        </Head>
+        <div>Loading...</div>
+      </>
+    );
+  }
+
+  // 데이터가 있지 않다면
+  if (!data) {
+    return (
+      <>
+        <Head>
+          <title>해외 쇼핑몰 추천 서비스</title>
+          <meta name="description" content="제품 정보가 없습니다." />
+          {/* sns 공유 타이틀 */}
+          <meta property="og:title" content="제품 정보가 없습니다." />
+          <meta property="og:description" content="제품 정보가 없습니다." />
+          <meta property="og:image" content="/thumbnail.png" />
+        </Head>
+        <div> 현재 데이터가 없습니다.</div>
+      </>
+    );
+  }
+  const { title, image, category, price, description, rating } = data;
+  return (
+    <>
+      <Head>
+        <title>{title} 상세정보</title>
+        <meta name="description" content={description} />
+        {/* sns 공유 타이틀 */}
+        <meta property="og:title" content={title} />
+        <meta property="og:description" content={description} />
+        <meta property="og:image" content={image} />
+      </Head>
+      <div className={styles.container}>
+        <div className={styles.title}>
+          {title} <span>(${price})</span>
+        </div>
+        <div
+          className={styles.cover_image}
+          style={{ backgroundImage: `url(${image})` }}
+        >
+          <Image src={image} alt={title} width={245} height={350} />
+        </div>
+        <div className={styles.category}>{category}</div>
+        <div className={styles.rating}>
+          Rating : {rating.rate} | {rating.count}
+        </div>
+        <div className={styles.description}>{description}</div>
+      </div>
+    </>
+  );
+}
+```
