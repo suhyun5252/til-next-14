@@ -1,12 +1,20 @@
-// Next.js API route support: https://nextjs.org/docs/api-routes/introduction
-import type { NextApiRequest, NextApiResponse } from "next";
-import { seedData } from "./alldata";
 import { GoodDataType } from "@/types";
-export default function handler(
-  req: NextApiRequest,
-  res: NextApiResponse<GoodDataType[]>
-) {
-  // 전체 데이터에서 랜덤하게 3개만 추출하기
-  const randomGoods = seedData.sort(() => Math.random() - 0.5).slice(0, 3);
-  res.status(200).json(randomGoods);
-}
+
+export const fetchRandomGoods = async (): Promise<GoodDataType[]> => {
+  // const url = "http://localhost:3000/api/randomgoods";
+  const url = "https://fakestoreapi.com/products";
+  try {
+    const response = await fetch(url);
+    // console.log(response);
+    // if (!response.ok) {
+    //   throw new Error("Failed to fetch goods");
+    // }
+    let data = await response.json();
+
+    data = data.sort(() => Math.random() - 0.5).slice(0, 3);
+    return data;
+  } catch (error) {
+    console.error(error);
+    return [];
+  }
+};

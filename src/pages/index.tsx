@@ -1,12 +1,12 @@
 import styles from "@/pages/index.module.css";
 // import goods from "@/mock/goods.json";
 import GoodItem from "@/components/good-item";
-import { ReactNode } from "react";
 import SearchLayout from "@/components/search-layout";
-import { InferGetServerSidePropsType, InferGetStaticPropsType } from "next";
 import { fetchGoods } from "@/lib/fetch";
+import { InferGetStaticPropsType } from "next";
+import { ReactNode } from "react";
 // import { GoodDataType } from "@/types";
-import { fetchRandomGood } from "./api/fetch-random-good";
+import { fetchRandomGood } from "../lib/fetch-random-good";
 
 // Next 에는 약속이 된 함수가 있다.
 
@@ -21,6 +21,7 @@ export const getStaticProps = async () => {
       allGoods: allGoods,
       randomGoods: randomGoods,
     },
+    revalidate: 60, // 60초마다 다시 생성
   };
 };
 

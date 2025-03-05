@@ -1,204 +1,160 @@
-# SSG
+# ISR
 
-- Server Side Generation
-- 데이터를 연동해서 딱 한번 (`npm run build`) html 로 생성함
-- 다시는 html 이 안바뀝니다.
-- 빌드 타임에 데이터 연동한 결과가 html 로 만들어진다
-- SSR 사용시에 요청 들어오면 데이터 연동 후 html 생성 반환(오래 걸릴 수 있다.)
-- SSG 사용시에 빌드시 데이터 연동 후 html 이미 완성해 둠.(오래걸리지 않음)
-- SSG 는 자주 업데이트 되는 곳에는 사용핮지 않는 것이 좋다.
+- Incremental Static Regeneration
+- 정적 페이지 즉 SSG 로 생성된 페이지를 다시 생성하는 법
 
-## SSG 작성해 보기
-
-### /src/pages/ssg.tsx 파일 생성
-
-- getStaticProps 함수로 설정
-- InferGetStaticPropsType<typeof getStaticProps> 타입 자동 추론
+## /src/pages/index.tsx
 
 ```tsx
-import styles from "@/pages/index.module.css";
-// import goods from "@/mock/goods.json";
-import GoodItem from "@/components/good-item";
-import { ReactNode } from "react";
-import SearchLayout from "@/components/search-layout";
-import { InferGetServerSidePropsType, InferGetStaticPropsType } from "next";
-import { fetchGoods } from "@/lib/fetch";
-// import { GoodDataType } from "@/types";
-import { fetchRandomGood } from "./api/fetch-random-good";
-
-// Next 에는 약속이 된 함수가 있다.
-
 export const getStaticProps = async () => {
   // 병렬로 실행하기
   const [allGoods, randomGoods] = await Promise.all([
     fetchGoods(),
     fetchRandomGood(),
   ]);
+
   return {
     props: {
       allGoods: allGoods,
       randomGoods: randomGoods,
     },
+    revalidate: 60, // 60 초후 다시 생성
   };
-};
-
-export default function Home({
-  allGoods,
-  randomGoods,
-}: InferGetStaticPropsType<typeof getStaticProps>) {
-  return (
-    <div className={styles.container}>
-      <section>
-        <h3>지금 추천하는 상품</h3>
-        {/* 3개만 랜덤하게 출력 */}
-        {randomGoods.map((item) => (
-          <GoodItem key={item.id} {...item} />
-        ))}
-      </section>
-      <section>
-        <h3>등록된 모든 상품</h3>
-        {/* 전체 상품 출력 */}
-        {allGoods.map((item) => (
-          <GoodItem key={item.id} {...item} />
-        ))}
-      </section>
-    </div>
-  );
-}
-
-// JS 에서는 함수도 객체다.
-// 객체는 속성을 추가할 수 있다.
-Home.getLayout = (page: ReactNode) => {
-  return <SearchLayout>{page}</SearchLayout>;
 };
 ```
 
-- `npm run build`
-- `npm run start`
+## API 호출로 재생성하기
 
-### /src/pages/search.tsx
+### API 생성
 
-- 검색페이지는 SSG를 적용하게엔 좋은 것은 아니다
-- 빌드시 `검색어를 지정해 줄 수가 없다.`
-- 빌드 말고 `클라이언트에서 처리를 해 줄 수는 있다.`
-- 클라이언트로 만들어 보기
+-/src/pages/api/revalidate.ts
 
-```tsx
-import styles from "@/pages/search.module.css";
-// 앱 라우터버전 import { useRouter } from "next/navigation";
-import { useRouter } from "next/router";
-// import goods from "@/mock/goods.json";
-import GoodItem from "@/components/good-item";
-import SearchLayout from "@/components/search-layout";
-import { ReactNode, useEffect, useState } from "react";
-import { GoodDataType } from "@/types";
-import { fetchSearchGood } from "@/lib/fetch-search-good";
+- http://localhost:3000/api/revalidate 로 호출
 
-export default function Page() {
-  const [goods, setGoods] = useState<GoodDataType[]>([]);
-
-  const router = useRouter();
-  const { keyword } = router.query;
-
-  const fetchSearchResult = async () => {
-    const data = await fetchSearchGood(keyword as string);
-    setGoods(data);
-  };
-
-  useEffect(() => {
-    // 키워드가 바뀌면 실행한다.
-    fetchSearchResult();
-  }, [keyword]);
-
-  return (
-    <div className={styles.container}>
-      <h4>
-        <strong>{keyword}</strong> : 검색 결과
-      </h4>
-      <div>
-        {goods.map((item) => (
-          <GoodItem key={item.id} {...item} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-Page.getLayout = (page: ReactNode) => {
-  return <SearchLayout>{page}</SearchLayout>;
-};
-```
-
-### /src/pages/good/[id].tsx
-
-- 경로가 동적이다.
-- 상품 상세 소개하는 부분은 내용이 자주 바뀌지 않을 것
-- 라우터가 바뀌는 것을 Next 가 파악했다.
-- http://localhost:3000/good/1,http://localhost:3000/good/2 ...
-- `동적 경로인 경우 SSG 를 적용하려면 getStaticPaths 가 필요`하다.
-- 빌드타임에 데이터 연동 파일을 미리 생성하는 것
-- 경로를 미리 알려주어야 합니다. `getStaticPaths`가 그 역할을 한다.
-
-```tsx
-import { fetchOneGood } from "@/lib/fetch-one-good";
-import styles from "@/pages/good/[id].module.css";
-import {
-  GetServerSidePropsContext,
-  InferGetServerSidePropsType,
-  InferGetStaticPropsType,
-} from "next";
-import Image from "next/image";
-// 라우터가 동적인 경로가 필요로 한 상황이다.
-// http://localhost:3000/good/[id]   ===> 파라메터
-export function getStaticPaths() {
-  return {
-    // paths 에는 기본적으로 SSG 를 적용해서 데이터를 미리 생성후 반영할 경로
-    paths: [{ params: { id: "1" } }, { params: { id: "2" } }],
-    // fallback: false, // 위의 paths 에 없는 경로는 404 로 출력
-    // fallback: true, // 위의 paths 에 없는 경로는 레이아웃 렌더링 후 데이터 로드
-    fallback: "blocking", // 위의 paths 에 없는 경로는 즉시 SSR 로 생성
-  };
-}
-
-export async function getStaticProps(context: GetServerSidePropsContext) {
-  // 쿼리 스트링이 context 에 담겨있음.
-  // const { keyword } = context.query;
-
-  // 파라메터는 context 에 담겨있음.
-  // 파라메터도 서버에서 문자열로만 온다.
-  const id = context.params!.id;
-  const data = await fetchOneGood(parseInt(id as string));
-  return {
-    props: {
-      data: data,
-    },
-  };
-}
-
-export default function Page({
-  data,
-}: InferGetStaticPropsType<typeof getStaticProps>) {
-  if (data === null) {
-    return <div>현재 데이터가 없습니다.</div>;
+```ts
+import type { NextApiRequest, NextApiResponse } from "next";
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  try {
+    // /src/pages/index.tsx 페이지를 다시 생성
+    await res.revalidate("/");
+    return res.json({ revalidated: true });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).send("Error revalidating");
   }
-  const { title, image, category, price, description, rating } = data;
-  return (
-    <div className={styles.container}>
-      <div className={styles.title}>
-        {title} <span>(${price})</span>
-      </div>
-      <div
-        className={styles.cover_image}
-        style={{ backgroundImage: `url(${image})` }}
-      >
-        <Image src={image} alt={title} width={245} height={350} />
-      </div>
-      <div className={styles.category}>{category}</div>
-      <div className={styles.rating}>
-        Rating : {rating.rate} | {rating.count}
-      </div>
-      <div className={styles.description}>{description}</div>
-    </div>
-  );
 }
 ```
+
+### fetch 생성
+
+- /src/lib/fetch-revalidate.ts
+
+```ts
+export const fetchRevalidate = async () => {
+  const url = "http://localhost:3000/api/revalidate";
+
+  try {
+    const res = await fetch(url);
+    return res.json();
+  } catch (error) {
+    console.log(error);
+  }
+};
+```
+
+## 실행시
+
+```tsx
+onClick = { fetchRevalidate };
+```
+
+# 실제 API 서버 연동 처리
+
+- 왜 api 폴더를 사용했지? 그냥 lib 폴더에 fetch 써도 되지 않나?
+- /src/pages/api/getallgood.ts
+
+```ts
+// Next.js API route support: https://nextjs.org/docs/api-routes/introduction
+import type { NextApiRequest, NextApiResponse } from "next";
+// import { seedData } from "./alldata";
+import { GoodDataType } from "@/types";
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse<GoodDataType[]>
+) {
+  const data = await fetch("https://fakestoreapi.com/products");
+  const json = await data.json();
+  res.status(200).json(json);
+}
+```
+
+- /src/pages/api/onegood.ts
+
+```ts
+\// Next.js API route support: https://nextjs.org/docs/api-routes/introduction
+import type { NextApiRequest, NextApiResponse } from "next";
+// import { seedData } from "./alldata";
+import { GoodDataType } from "@/types";
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse<GoodDataType | null>
+) {
+  // 요청(req)에 의한 Params 처리하기
+  // URI 는 무조건 문자열로 처리됩니다.
+  const { id } = req.query;
+  const data = await fetch(`https://fakestoreapi.com/products/${id}`);
+  const json = await data.json();
+
+  res.status(200).json(json || null);
+}
+
+
+```
+
+- /src/pages/api/randomgood.ts
+
+```ts
+// Next.js API route support: https://nextjs.org/docs/api-routes/introduction
+import type { NextApiRequest, NextApiResponse } from "next";
+// import { seedData } from "./alldata";
+import { GoodDataType } from "@/types";
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse<GoodDataType[]>
+) {
+  // 전체 데이터에서 랜덤하게 3개만 추출하기
+  const data = await fetch("https://fakestoreapi.com/products");
+  const json = await data.json();
+  const randomGoods = json.sort(() => Math.random() - 0.5).slice(0, 3);
+  res.status(200).json(randomGoods);
+}
+```
+
+- /src/pages/api/searchgood.ts
+
+```ts
+// Next.js API route support: https://nextjs.org/docs/api-routes/introduction
+import type { NextApiRequest, NextApiResponse } from "next";
+// import { seedData } from "./alldata";
+import { GoodDataType } from "@/types";
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse<GoodDataType[]>
+) {
+  // 요청(req)에 의한 쿼리(query) 처리하기
+  const { keyword } = req.query;
+  const data = await fetch("https://fakestoreapi.com/products");
+  const json = await data.json();
+  const filterGoods = json.filter((good: GoodDataType) =>
+    good.title.includes(keyword as string)
+  );
+  res.status(200).json(filterGoods);
+}
+```
+
+- 실제 서버가 있다면 API 가 정상적으로 실행이 됨. 지금만 build 시 생성 안됨
+
+# 살아있는 서버로 연결하기 위해 fetch를 직접 처리
